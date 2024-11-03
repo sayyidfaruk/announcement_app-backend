@@ -5,6 +5,9 @@ const { User } = require('../models');
 exports.register = async (req, res) => {
     try {
         const { nrp, name, email, password, roleId } = req.body;
+        if (!nrp || !name || !password || !roleId) {
+            return res.status(400).json({ message: 'NRP, name, password, and role are required.' });
+        }
         const hashedPassword = await bcrypt.hash(password, Number(process.env.PASS_SALT));
         const user = await User.create({ nrp, name, email, password: hashedPassword, roleId });
 
@@ -35,7 +38,7 @@ exports.login = async (req, res) => {
             { expiresIn: '7d' }
         );
 
-        user.refreshToken = refreshToken; // You might need to add refreshToken column in your User model and migration
+        user.refreshToken = refreshToken;
         await user.save();
 
         res.json({ accessToken, refreshToken });
@@ -45,7 +48,8 @@ exports.login = async (req, res) => {
 };
 
 exports.changePassword = async (req, res) => {
-    const { nrp, newPassword } = req.body;
+    const { nrp } = req.user;
+    const { newPassword } = req.body;
 
     try {
         const user = await User.findOne({ where: { nrp } });
@@ -82,6 +86,31 @@ exports.deleteUser = async (req, res) => {
     }
 };
 
+exports.updateUser = async (req, res) => {
+    const { nrp, name, email, password, roleId } = req.body;
+    
+    try {
+        const user = await User.findOne({ where: { nrp } });
+        
+        if (!user) {
+            return res.status(404).json({ message: `User not found ${nrp}` });
+        }
+
+        let updatedData = { name, email, roleId };
+
+        if (password) {
+            const hashedPassword = await bcrypt.hash(password, Number(process.env.PASS_SALT));
+            updatedData.password = hashedPassword;
+        }
+
+        await User.update(updatedData, { where: { nrp } });
+
+        return res.status(200).json({ message: 'User updated successfully' });
+    } catch (error) {
+        return res.status(500).json({ message: 'Error updating user', error });
+    }
+};
+
 exports.refreshToken = async (req, res) => {
     const { refreshToken } = req.body;
 
@@ -92,7 +121,7 @@ exports.refreshToken = async (req, res) => {
 
         const user = await User.findOne({ where: { nrp: decoded.nrp } });
         if (!user || user.refreshToken !== refreshToken) {
-            return res.status(403).json({ message: 'Invalid refresh token' });
+            return res.status(401).json({ message: 'Invalid refresh token' });
         }
 
         const newAccessToken = jwt.sign(
@@ -124,3 +153,12 @@ exports.logout = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+exports.getAllUsers = async (req, res) => {
+    try {
+        const users = await User.findAll();
+        return res.status(200).json(users);
+    } catch (error) {
+        return res.status(500).json({ message: 'Error fetching users', error });
+    }
+}
