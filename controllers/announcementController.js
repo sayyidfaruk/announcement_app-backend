@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const { Announcement, User } = require('../models');
 
 exports.createAnnouncement = async (req, res) => {
@@ -65,6 +67,15 @@ exports.editAnnouncement = async (req, res) => {
       return res.status(404).json({ message: 'Announcement not found' });
     }
 
+    if (attachment && announcement.attachment) {
+      const oldFilePath = path.join(__dirname, '../uploads', announcement.attachment);
+      fs.unlink(oldFilePath, (err) => {
+        if (err) {
+          console.error('Error deleting old file:', err);
+        }
+      });
+    }
+
     const updateData = { title, content };
 
     if (attachment) {
@@ -83,9 +94,18 @@ exports.deleteAnnouncement = async (req, res) => {
   const { id } = req.params;
   try {
     const announcement = await Announcement.findOne({ where: { id } });
-
+    
     if (!announcement) {
       return res.status(404).json({ message: 'Announcement not found' });
+    }
+
+    if (announcement.attachment) {
+      const filePath = path.join(__dirname, '../uploads', announcement.attachment);
+      fs.unlink(filePath, (err) => {
+        if (err) {
+          console.error('Error deleting file:', err);
+        }
+      });
     }
 
     await Announcement.destroy({ where: { id } });
